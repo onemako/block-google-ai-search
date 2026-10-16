@@ -13,7 +13,7 @@ installs the same signed `.crx`, so the extension ID is the same in both browser
 |---|---|---|
 | Google Chrome | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
 | Microsoft Edge | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
-| Google Chrome | macOS (MDM-enrolled) | `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through your MDM (for example NinjaOne) |
+| Google Chrome | macOS | Chrome Enterprise Core enrollment (`deploy/mac/enroll-chrome-enterprise-core.sh`, run by an RMM agent such as NinjaOne), or `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through an MDM |
 
 Firefox and Safari are not supported. Firefox needs a Mozilla-signed `.xpi`, and
 Safari needs a signed and notarized Mac app.
@@ -88,6 +88,7 @@ extension/            Extension source (the workflow runs when this folder chang
 scripts/build.mjs     Build, sign (CRX3), verify, and write updates.xml
 .github/workflows/release.yml   CI: build, sign, publish to Pages, create a Release
 deploy/Set-ExtensionForceInstall.ps1   Adds the Chrome + Edge policy entries on a single PC
+deploy/mac/enroll-chrome-enterprise-core.sh   Enrolls Chrome on a Mac in Chrome Enterprise Core (no MDM)
 deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig   macOS profile for Chrome (deploy with MDM)
 ```
 
@@ -227,34 +228,71 @@ there, and prints what it did. If a GPO also manages that policy, the GPO
 overwrites the script's change at the next refresh. In that case, add the entry to
 the GPO instead.
 
-## Deploying to Macs (Chrome, through MDM)
+## Deploying to Macs (Chrome)
 
-Chrome on macOS only force-installs a self-hosted extension when the Mac is
-**enrolled in an MDM**. On a Mac that is only monitored by an RMM agent, Chrome
-blocks the entry the same way it does on a Windows PC that is not domain-joined.
+Chrome on macOS only force-installs a self-hosted extension when Chrome is
+managed in one of these ways:
+- the Mac is enrolled in an MDM;
+- the Mac is bound to a directory through MCX;
+- Chrome is enrolled in **Chrome Enterprise Core**.
 
+An RMM agent alone, such as the NinjaOne agent, doesn't count. Chrome then marks
+the entry `[BLOCKED]`, the same way it does on a Windows PC that isn't
+domain-joined.
+
+### Option A: Chrome Enterprise Core + NinjaOne agent (no MDM needed)
+
+Chrome Enterprise Core is Google's free cloud management for the Chrome browser.
+Chrome is enrolled with a token, and policies, including the extension
+force-install, are set in the Google Admin console.
+
+1. **Sign up / open the Admin console.** Go to https://admin.google.com. Use your
+   existing Google Workspace admin account, or sign up for Chrome Enterprise Core,
+   which is free.
+2. **Create an enrollment token.** Go to **Devices → Chrome → Managed browsers**,
+   choose the organizational unit, then **⋮ → Enrollment token** (or **Add
+   token**). Copy the token. Treat it like a password and don't commit it.
+3. **Force-install the extension.** Go to **Devices → Chrome → Apps & extensions →
+   Users & browsers**, and select the same organizational unit. Click **+** and
+   choose **Add Chrome app or extension by ID**. Select **From a custom URL**, then
+   enter:
+   - Extension ID: `enkieoehgkejdljiejbjmenfloafdfgg`
+   - URL: `https://onemako.github.io/block-google-ai-search/updates.xml`
+
+   Set its installation policy to **Force install** and save.
+4. **Enroll Chrome on each Mac through the NinjaOne agent.** Add
+   [`deploy/mac/enroll-chrome-enterprise-core.sh`](deploy/mac/enroll-chrome-enterprise-core.sh)
+   as a macOS script in NinjaOne and run it as root. Pass the token either as a
+   script variable named `CHROME_ENROLLMENT_TOKEN` or as the first script
+   parameter. The script writes the token to
+   `/Library/Google/Chrome/CloudManagementEnrollmentToken`. Chrome enrolls the next
+   time it starts.
+5. **Check on a Mac.** Quit and reopen Chrome, then check:
+   - `chrome://management` should say the browser is managed by your organization.
+   - `chrome://policy` should show `ExtensionInstallForcelist` (source: Cloud) as
+     **OK**.
+   - `chrome://extensions` should list **Google Web Results Only**.
+
+   Enrolled browsers also show up under **Devices → Chrome → Managed browsers**.
+
+The same approach also works for Windows PCs that aren't domain-joined. Enroll
+Chrome there with the token through Google's Windows instructions, and the Admin
+console force-install applies.
+
+### Option B: an MDM configuration profile
+
+If the Macs are ever enrolled in an MDM (NinjaOne MDM, Jamf, Intune, Kandji,
+Mosyle…), deploy
 [`deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig`](deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig)
-is a configuration profile. It sets `ExtensionInstallForcelist` for the
-`com.google.Chrome` preference domain.
-
-**NinjaOne:**
-1. Enroll the Macs in **NinjaOne MDM** (Apple Push certificate set up, Macs
-   enrolled through Apple Business Manager/ADE or the enrollment link). The
-   NinjaOne RMM agent alone is not MDM enrollment.
-2. Edit the macOS MDM policy that applies to those Macs, open **Custom
-   Payloads**, and add the `.mobileconfig` file, either uploaded or pasted.
-3. Save. Once the profile has reached a Mac, check `chrome://policy` and
-   `chrome://extensions` there, as described below.
-
-**Other MDMs (Jamf, Intune, Kandji, Mosyle…):** upload the same file as a
-custom configuration profile, scoped to computers.
-
-On a Mac, `System Settings → General → Device Management` should list
-"Google Web Results Only (Chrome)".
+as a custom configuration profile scoped to computers. In NinjaOne MDM, that's
+the macOS policy's **Custom Payloads**. The profile sets
+`ExtensionInstallForcelist` for `com.google.Chrome`. On a Mac, `System Settings →
+General → Device Management` should list "Google Web Results Only (Chrome)".
 
 If another profile on the same Mac already sets `ExtensionInstallForcelist` for
-Chrome, macOS does not merge the two lists, and only one of them wins. In that
-case, add this entry to that profile's list instead of deploying a second profile.
+Chrome, macOS doesn't merge the two lists, and only one of them takes effect. In
+that case, add this entry to that profile's list instead of deploying a second
+profile.
 
 ## Testing on one PC or Mac
 
@@ -292,8 +330,9 @@ different extension ID. That doesn't matter for testing the rules.
 - **Rule 2 matches any URL on those domains that contains `/search?`.** That
   includes other Google products that use that path.
 - **Managed devices only.** Chrome and Edge force-install self-hosted extensions
-  only on Windows PCs that are domain-joined or MDM-enrolled, and on Macs that
-  are MDM-enrolled. Anywhere else, `chrome://policy` shows the entry as
+  only on Windows PCs that are domain-joined or MDM-enrolled, on Macs that are
+  MDM-enrolled, and (Chrome only) where the browser is enrolled in Chrome
+  Enterprise Core. Anywhere else, `chrome://policy` shows the entry as
   `[BLOCKED]` with "Invalid extension ID" and a "not detected as enterprise
   managed" warning, and nothing is installed.
 - **Google can change `udm=14`.** If Google drops or renames the Web view
