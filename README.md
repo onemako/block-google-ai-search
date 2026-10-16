@@ -220,6 +220,11 @@ powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1 
 powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1 -Remove   # remove only this extension
 ```
 
+Run it as **SYSTEM** (for example, NinjaOne "Run As: System") or as an elevated
+local administrator. The policy is machine-wide (`HKLM`), so it applies to every
+user on the PC. If the script is started in 32-bit PowerShell, it relaunches
+itself in 64-bit PowerShell, so the values land where Chrome and Edge read them.
+
 For each browser, the script appends a new numbered value under
 `HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist` (Chrome) or
 `HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist` (Edge). It

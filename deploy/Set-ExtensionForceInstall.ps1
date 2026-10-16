@@ -45,6 +45,18 @@ $Browsers    = @('Chrome', 'Edge')   # remove one to manage only the other
 # -----------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'
+
+# RMM agents sometimes run scripts in 32-bit PowerShell, which can see a
+# redirected copy of HKLM\SOFTWARE. Re-run in 64-bit PowerShell so the policy
+# lands where 64-bit Chrome and Edge read it.
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+    $ps64 = Join-Path $env:WINDIR 'SysNative\WindowsPowerShell\v1.0\powershell.exe'
+    $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($Remove) { $relaunch += '-Remove' }
+    & $ps64 @relaunch
+    exit $LASTEXITCODE
+}
+
 $PolicyKeys = @{
     Chrome = 'HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist'
     Edge   = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist'
