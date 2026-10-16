@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>ExtensionInstallForcelist</key>
+			<array>
+				<string>enkieoehgkejdljiejbjmenfloafdfgg;https://onemako.github.io/block-google-ai-search/updates.xml</string>
+			</array>
+			<key>PayloadDisplayName</key>
+			<string>Google Chrome: force-install Google Web Results Only</string>
+			<key>PayloadIdentifier</key>
+			<string>com.onemako.webresultsonly.chrome.settings</string>
+			<key>PayloadType</key>
+			<string>com.google.Chrome</string>
+			<key>PayloadUUID</key>
+			<string>96F9816A-D2D0-40D6-BB00-4BAE46B9A866</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>Force-installs the self-hosted Google Web Results Only extension in Google Chrome.</string>
+	<key>PayloadDisplayName</key>
+	<string>Google Web Results Only (Chrome)</string>
+	<key>PayloadIdentifier</key>
+	<string>com.onemako.webresultsonly.chrome</string>
+	<key>PayloadOrganization</key>
+	<string>onemako</string>
+	<key>PayloadRemovalDisallowed</key>
+	<true/>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>7FEC0BAF-3340-485E-8C51-6296D6B8222A</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>

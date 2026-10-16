@@ -1,13 +1,22 @@
 # Google Web Results Only
 
-A self-hosted Manifest V3 Chrome extension that makes Google Search open in the
+A self-hosted Manifest V3 extension for Google Chrome and Microsoft Edge that makes Google Search open in the
 **Web** results view, which has no AI Overview. Any top-level navigation to
 `google.com/search?…` (and the other listed Google domains) that lacks `udm=14`
 is redirected to the same URL with `udm=14` added.
 
-It is meant to be force-installed on domain-joined Windows PCs through the
-`ExtensionInstallForcelist` policy, so it is hosted on GitHub Pages instead of
-the Chrome Web Store.
+It is meant to be force-installed through the `ExtensionInstallForcelist`
+policy, so it is hosted on GitHub Pages instead of a browser's web store. Edge
+installs the same signed `.crx`, so the extension ID is the same in both browsers.
+
+| Browser | Platform | How it is deployed |
+|---|---|---|
+| Google Chrome | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
+| Microsoft Edge | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
+| Google Chrome | macOS (MDM-enrolled) | `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through your MDM (for example NinjaOne) |
+
+Firefox and Safari are not supported. Firefox needs a Mozilla-signed `.xpi`, and
+Safari needs a signed and notarized Mac app.
 
 - Uses `declarativeNetRequest` static rules only. There is no background script, no
   content script, no remote code, no analytics and no data collection.
@@ -78,7 +87,8 @@ extension/            Extension source (the workflow runs when this folder chang
   icons/              Placeholder icons (regenerate with scripts/make-icons.py)
 scripts/build.mjs     Build, sign (CRX3), verify, and write updates.xml
 .github/workflows/release.yml   CI: build, sign, publish to Pages, create a Release
-deploy/Set-ChromeForceInstall.ps1   Adds the policy entry on a single PC
+deploy/Set-ExtensionForceInstall.ps1   Adds the Chrome + Edge policy entries on a single PC
+deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig   macOS profile for Chrome (deploy with MDM)
 ```
 
 ## One-time setup
@@ -150,8 +160,9 @@ extension**. You can also start it by hand from the Actions tab
    Pages URL, because Release downloads redirect.
 6. Writes the extension ID and the force-install string to the run summary.
 
-Chrome checks for updates every few hours. To update a PC right away, open
-`chrome://extensions`, turn on Developer mode, and click **Update**.
+Chrome and Edge check for updates every few hours. To update a PC right away,
+open `chrome://extensions` (or `edge://extensions`), turn on Developer mode, and
+click **Update**.
 
 ## Finding the extension ID
 
@@ -178,41 +189,82 @@ The policy value is `<extension-id>;<update URL>`:
 
 Copy the exact string from the workflow summary.
 
-1. Install the Chrome ADMX templates on your domain controller or central store, if
-   they aren't installed yet. They come in Google's Chrome Enterprise bundle.
+1. Install the ADMX templates in your central store
+   (`\\<domain>\SYSVOL\<domain>\Policies\PolicyDefinitions`) if they aren't
+   there yet:
+   - **Chrome**: `chrome.admx` and `en-US\chrome.adml` from Google's Chrome
+     Enterprise bundle.
+   - **Edge**: `msedge.admx` and `en-US\msedge.adml` from Microsoft's Edge policy
+     templates (download them from the Microsoft Edge for Business page).
 2. In **Group Policy Management**, edit (or create) a GPO linked to the computers' OU.
-3. Go to **Computer Configuration → Policies → Administrative Templates → Google →
-   Google Chrome → Extensions → Configure the list of force-installed apps and
-   extensions**.
-4. Set it to **Enabled**, click **Show…**, and add the string above as a new row.
-   Keep any existing rows.
-5. On a client, run `gpupdate /force` and then check Chrome (see below).
+3. Add the string above as a new row in each browser's list. Keep any existing rows.
+   - **Chrome:** **Computer Configuration → Policies → Administrative Templates →
+     Google → Google Chrome → Extensions → Configure the list of force-installed
+     apps and extensions**. Set it to **Enabled** and click **Show…**.
+   - **Edge:** **Computer Configuration → Policies → Administrative Templates →
+     Microsoft Edge → Extensions → Control which extensions are installed
+     silently**. Set it to **Enabled** and click **Show…**.
+4. On a client, run `gpupdate /force` and then check each browser (see below).
 
 Force-installed extensions can't be disabled or removed by users.
 
-### Single PC without GPO: `deploy/Set-ChromeForceInstall.ps1`
+### Single PC without GPO: `deploy/Set-ExtensionForceInstall.ps1`
 
 `$ExtensionId` and `$UpdateUrl` at the top of the script are already filled in.
-Run it in an **elevated** PowerShell:
+`$Browsers` lists `Chrome` and `Edge`. Remove one if you want the script to handle
+only the other. Run it in an **elevated** PowerShell:
 
 ```powershell
-.\deploy\Set-ChromeForceInstall.ps1           # add the entry
-.\deploy\Set-ChromeForceInstall.ps1 -Remove   # remove only this extension's entry
+powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1           # add
+powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1 -Remove   # remove only this extension
 ```
 
-The script appends a new numbered value under
-`HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist`. It never
-overwrites or renumbers existing entries, skips the change if the ID is already
+For each browser, the script appends a new numbered value under
+`HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist` (Chrome) or
+`HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist` (Edge). It
+never overwrites or renumbers existing entries, skips the change if the ID is already
 there, and prints what it did. If a GPO also manages that policy, the GPO
 overwrites the script's change at the next refresh. In that case, add the entry to
 the GPO instead.
 
-## Testing on one PC
+## Deploying to Macs (Chrome, through MDM)
+
+Chrome on macOS only force-installs a self-hosted extension when the Mac is
+**enrolled in an MDM**. On a Mac that is only monitored by an RMM agent, Chrome
+blocks the entry the same way it does on a Windows PC that is not domain-joined.
+
+[`deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig`](deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig)
+is a configuration profile. It sets `ExtensionInstallForcelist` for the
+`com.google.Chrome` preference domain.
+
+**NinjaOne:**
+1. Enroll the Macs in **NinjaOne MDM** (Apple Push certificate set up, Macs
+   enrolled through Apple Business Manager/ADE or the enrollment link). The
+   NinjaOne RMM agent alone is not MDM enrollment.
+2. Edit the macOS MDM policy that applies to those Macs, open **Custom
+   Payloads**, and add the `.mobileconfig` file, either uploaded or pasted.
+3. Save. Once the profile has reached a Mac, check `chrome://policy` and
+   `chrome://extensions` there, as described below.
+
+**Other MDMs (Jamf, Intune, Kandji, Mosyle…):** upload the same file as a
+custom configuration profile, scoped to computers.
+
+On a Mac, `System Settings → General → Device Management` should list
+"Google Web Results Only (Chrome)".
+
+If another profile on the same Mac already sets `ExtensionInstallForcelist` for
+Chrome, macOS does not merge the two lists, and only one of them wins. In that
+case, add this entry to that profile's list instead of deploying a second profile.
+
+## Testing on one PC or Mac
 
 1. Apply the policy (GPO + `gpupdate /force`, or the script above).
-2. Open `chrome://policy`, click **Reload policies**, and confirm that
-   `ExtensionInstallForcelist` shows your string with status **OK**.
-3. Open `chrome://extensions`. **Google Web Results Only** should appear with
+2. Open `chrome://policy` (Edge: `edge://policy`), click **Reload policies**,
+   and confirm that `ExtensionInstallForcelist` shows your string with status
+   **OK**. If it shows `[BLOCKED]` with "not detected as enterprise managed", the
+   device isn't domain-joined or MDM-enrolled (see Known limits).
+3. Open `chrome://extensions` (Edge: `edge://extensions`).
+   **Google Web Results Only** should appear with
    *Installed by your administrator*, the expected ID, and the expected version.
    If it is missing, wait a minute, or turn on Developer mode and click **Update**.
 4. Search on google.com. The URL should end up containing `udm=14`, and the page
@@ -226,8 +278,9 @@ different extension ID. That doesn't matter for testing the rules.
 
 ## Known limits
 
-- **Chrome only.** Edge and other Chromium browsers use their own policies and
-  aren't covered here. The rules themselves would work there.
+- **Chrome and Edge only.** Firefox and Safari are not supported (see the
+  table at the top). Other Chromium browsers (Brave, Opera, Vivaldi) have their
+  own policies and aren't covered here.
 - **Other Google tabs are redirected to Web.** Images, Videos, News, Shopping,
   Books and similar tabs all use `/search?` URLs without `udm=14`, so they land on
   Web results. See *Optional: allow another view* above.
@@ -238,9 +291,10 @@ different extension ID. That doesn't matter for testing the rules.
   untouched until you add that domain to `extension/domains.json`.
 - **Rule 2 matches any URL on those domains that contains `/search?`.** That
   includes other Google products that use that path.
-- **Managed devices only.** Chrome on Windows and macOS installs self-hosted
-  extensions only through policy. On PCs that are not domain-joined (Active
-  Directory or Entra ID) or MDM-managed, Chrome may ignore or block the
-  force-install.
+- **Managed devices only.** Chrome and Edge force-install self-hosted extensions
+  only on Windows PCs that are domain-joined or MDM-enrolled, and on Macs that
+  are MDM-enrolled. Anywhere else, `chrome://policy` shows the entry as
+  `[BLOCKED]` with "Invalid extension ID" and a "not detected as enterprise
+  managed" warning, and nothing is installed.
 - **Google can change `udm=14`.** If Google drops or renames the Web view
   parameter, the rules need updating.
