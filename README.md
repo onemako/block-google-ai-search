@@ -44,7 +44,7 @@ and nowhere else:
 
 ```json
 {
-  "domains": ["google.com", "google.com.ph"]
+  "domains": ["google.com"]
 }
 ```
 
