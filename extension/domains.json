@@ -1,0 +1,7 @@
+{
+  "_comment": "SINGLE SOURCE OF TRUTH for the Google domains this extension acts on. Add a bare domain (no scheme, no 'www.') to extend coverage, e.g. \"google.co.uk\". The build script copies this list into rules.json (requestDomains, which also matches subdomains such as www.) and manifest.json (host_permissions). Bump the version in manifest.json after editing.",
+  "domains": [
+    "google.com",
+    "google.com.ph"
+  ]
+}

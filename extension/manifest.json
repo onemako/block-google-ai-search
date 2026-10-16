@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Google Web Results Only",
+  "short_name": "Web Results Only",
+  "description": "Forces Google Search to open in the Web results view (udm=14).",
+  "version": "1.0.0",
+  "minimum_chrome_version": "101",
+  "update_url": "https://onemako.github.io/block-google-ai-search/updates.xml",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": [],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "web_results_only",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}
