@@ -1,0 +1,174 @@
+name: Build, sign and publish extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two publishes at once; a queued run waits for the running one.
+concurrency:
+  group: publish-extension
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      extension_id: ${{ steps.pack.outputs.extension_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Fails with a clear message if Pages is not enabled with source "GitHub Actions".
+      - name: Read GitHub Pages URL
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Check version was increased
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./extension/manifest.json').version")
+          if gh release view "v${version}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release v${version} already exists. Bump \"version\" in extension/manifest.json."
+            exit 1
+          fi
+          # Cache-buster so the Pages CDN cannot hand back a stale copy.
+          status=$(curl -sS -L -o "$RUNNER_TEMP/published.xml" -w '%{http_code}' \
+            "${BASE_URL%/}/updates.xml?nocache=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")
+          if [ "$status" = "404" ]; then
+            echo "No updates.xml published yet (HTTP 404); treating this as the first release."
+            : > "$RUNNER_TEMP/published.xml"
+          elif [ "$status" != "200" ]; then
+            echo "::error::Could not fetch the published updates.xml (HTTP $status)."
+            exit 1
+          fi
+          node scripts/build.mjs check-version "$RUNNER_TEMP/published.xml"
+
+      - name: Pack and sign CRX
+        id: pack
+        env:
+          EXTENSION_PEM: ${{ secrets.EXTENSION_PEM }}
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EXTENSION_PEM}" ]; then
+            echo "::error::The EXTENSION_PEM repository secret is not set. See README.md."
+            exit 1
+          fi
+          # The key lives only in the runner's temp dir (outside the checkout) and is deleted afterwards.
+          key="$RUNNER_TEMP/extension.pem"
+          trap 'rm -f "$key"' EXIT
+          umask 077
+          printf '%s\n' "$EXTENSION_PEM" > "$key"
+          node scripts/build.mjs pack "$key" "${BASE_URL%/}"
+          {
+            echo "version=$(node -p "require('./dist/build-info.json').version")"
+            echo "extension_id=$(node -p "require('./dist/build-info.json').extensionId")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write summary
+        run: |
+          node -e '
+            const i = require("./dist/build-info.json");
+            console.log(`## ${i.name} ${i.version}\n`);
+            console.log(`| | |\n|---|---|`);
+            console.log(`| Extension ID | \`${i.extensionId}\` |`);
+            console.log(`| Update URL | ${i.updateUrl} |`);
+            console.log(`| CRX | ${i.crxUrl} |`);
+            console.log(`| CRX SHA-256 | \`${i.crxSha256}\` |\n`);
+            console.log("ExtensionInstallForcelist value:\n");
+            console.log("```\n" + i.forceInstall + "\n```");
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/site
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crx
+          path: |
+            dist/site/webonly.crx
+            dist/build-info.json
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: crx
+
+      # Fetch the live files anonymously, the way Chrome will, and check they match this build.
+      - name: Verify published files over HTTPS
+        run: |
+          set -euo pipefail
+          read -r ID VERSION UPDATE_URL CRX_URL SHA < <(node -p '
+            const i = require("./build-info.json");
+            [i.extensionId, i.version, i.updateUrl, i.crxUrl, i.crxSha256].join(" ")')
+          bust="nocache=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for attempt in $(seq 1 20); do
+            # No -L: Chrome should get a direct 200, not a redirect.
+            xml_status=$(curl -sS -o live.xml -w '%{http_code}' "${UPDATE_URL}?${bust}" || true)
+            crx_status=$(curl -sS -o live.crx -w '%{http_code} %{content_type}' "${CRX_URL}?${bust}" || true)
+            if [ "$xml_status" = "200" ] && [ "${crx_status%% *}" = "200" ] \
+               && grep -q "appid='${ID}'" live.xml && grep -q "version='${VERSION}'" live.xml \
+               && [ "$(sha256sum live.crx | cut -d' ' -f1)" = "$SHA" ]; then
+              echo "updates.xml: HTTP $xml_status, appid ${ID}, version ${VERSION}"
+              echo "webonly.crx: HTTP ${crx_status}, sha256 ${SHA}"
+              grep -q "codebase='${CRX_URL}'" live.xml || { echo "::error::codebase in live updates.xml is not ${CRX_URL}"; exit 1; }
+              echo "Verified: live files match extension ID ${ID}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Attempt ${attempt}: updates.xml HTTP ${xml_status}, webonly.crx HTTP ${crx_status}; waiting for Pages..."
+            sleep 15
+          done
+          echo "::error::Published files at ${UPDATE_URL} are not reachable anonymously or do not match this build. If the Pages site is private (Enterprise access control), Chrome cannot download it either."
+          exit 1
+
+      - name: Create GitHub Release (archive copy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          EXTENSION_ID: ${{ needs.build.outputs.extension_id }}
+        run: |
+          set -euo pipefail
+          # The artifact keeps paths relative to dist/, so the CRX is at site/webonly.crx.
+          cp site/webonly.crx "webonly-${VERSION}.crx"
+          gh release create "v${VERSION}" "webonly-${VERSION}.crx" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v${VERSION}" \
+            --notes "Archive copy of version ${VERSION}. Extension ID: \`${EXTENSION_ID}\`.
+          Chrome installs and updates from GitHub Pages (updates.xml), not from this release."

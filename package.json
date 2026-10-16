@@ -1,0 +1,13 @@
+{
+  "name": "google-web-results-only",
+  "private": true,
+  "description": "Build tooling for the self-hosted Google Web Results Only Chrome extension.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs build"
+  },
+  "devDependencies": {
+    "crx3": "2.0.0"
+  }
+}
