@@ -1,0 +1,6 @@
+# Signing keys and packed builds must never be committed.
+*.pem
+*.crx
+*.zip
+dist/
+node_modules/
