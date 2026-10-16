@@ -13,6 +13,10 @@
     same extension ID already exists, nothing is changed for that browser.
     -Remove deletes only the values for this extension ID.
 
+    Optional: set $DisablePrivateBrowsing = $true below to also turn off
+    Incognito (Chrome) and InPrivate (Edge), because extensions don't run in
+    private windows unless each user allows it.
+
     Run from an elevated (Administrator) PowerShell:
         powershell -ExecutionPolicy Bypass -File .\Set-ExtensionForceInstall.ps1
         powershell -ExecutionPolicy Bypass -File .\Set-ExtensionForceInstall.ps1 -Remove
@@ -42,6 +46,13 @@ param(
 $ExtensionId = 'enkieoehgkejdljiejbjmenfloafdfgg'
 $UpdateUrl   = 'https://onemako.github.io/block-google-ai-search/updates.xml'
 $Browsers    = @('Chrome', 'Edge')   # remove one to manage only the other
+
+# Extensions do not run in Incognito (Chrome) or InPrivate (Edge) windows unless
+# the user turns on "Allow in Incognito", and no policy can turn that on for
+# them. Set this to $true to turn private browsing OFF for everyone on this PC,
+# so searches can't bypass the extension that way. -Remove undoes it only if
+# the value is still the one this script set.
+$DisablePrivateBrowsing = $false
 # -----------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +73,11 @@ $PolicyKeys = @{
     Edge   = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist'
 }
 $Entry = "$ExtensionId;$UpdateUrl"
+# 1 = private browsing disabled
+$PrivateBrowsingPolicy = @{
+    Chrome = @{ Path = 'HKLM:\SOFTWARE\Policies\Google\Chrome';  Name = 'IncognitoModeAvailability' }
+    Edge   = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name = 'InPrivateModeAvailability' }
+}
 
 if ($ExtensionId -notmatch '^[a-p]{32}$') {
     throw "ExtensionId '$ExtensionId' is not a valid extension ID (32 letters a-p). Edit the settings at the top of this script."
@@ -133,7 +149,42 @@ function Add-OurEntry([string]$Browser, [string]$KeyPath) {
     Write-Host "[$Browser] Added value '$newName' = '$Entry' to $KeyPath"
 }
 
+function Get-PolicyValue([string]$KeyPath, [string]$Name) {
+    if (-not (Test-Path -LiteralPath $KeyPath)) { return $null }
+    return (Get-Item -LiteralPath $KeyPath).GetValue($Name)
+}
+
+function Disable-PrivateBrowsing([string]$Browser) {
+    $p = $PrivateBrowsingPolicy[$Browser]
+    $current = Get-PolicyValue $p.Path $p.Name
+    if ($null -ne $current -and [int]$current -eq 1) {
+        Write-Host "[$Browser] $($p.Name) is already 1 (private browsing off). Nothing changed."
+        return
+    }
+    if (-not (Test-Path -LiteralPath $p.Path)) { New-Item -Path $p.Path -Force | Out-Null }
+    New-ItemProperty -LiteralPath $p.Path -Name $p.Name -PropertyType DWord -Value 1 -Force | Out-Null
+    $was = if ($null -eq $current) { 'not set' } else { "was $current" }
+    Write-Host "[$Browser] Set $($p.Name) = 1 (private browsing off; $was) in $($p.Path)"
+}
+
+function Restore-PrivateBrowsing([string]$Browser) {
+    $p = $PrivateBrowsingPolicy[$Browser]
+    $current = Get-PolicyValue $p.Path $p.Name
+    if ($null -ne $current -and [int]$current -eq 1) {
+        Remove-ItemProperty -LiteralPath $p.Path -Name $p.Name
+        Write-Host "[$Browser] Removed $($p.Name) (private browsing allowed again)."
+    } else {
+        Write-Host "[$Browser] $($p.Name) is not 1. Left unchanged."
+    }
+}
+
 foreach ($b in $Browsers) {
-    if ($Remove) { Remove-OurEntry $b $PolicyKeys[$b] } else { Add-OurEntry $b $PolicyKeys[$b] }
+    if ($Remove) {
+        Remove-OurEntry $b $PolicyKeys[$b]
+        if ($DisablePrivateBrowsing) { Restore-PrivateBrowsing $b }
+    } else {
+        Add-OurEntry $b $PolicyKeys[$b]
+        if ($DisablePrivateBrowsing) { Disable-PrivateBrowsing $b }
+    }
 }
 Write-Host 'Reload policies in chrome://policy and edge://policy (or restart the browsers).'

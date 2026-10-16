@@ -233,6 +233,24 @@ there, and prints what it did. If a GPO also manages that policy, the GPO
 overwrites the script's change at the next refresh. In that case, add the entry to
 the GPO instead.
 
+## Incognito and InPrivate windows
+
+Chrome and Edge don't run extensions in Incognito/InPrivate windows unless the user
+turns on **Allow in Incognito** on the extension's details page. There is **no
+policy** to turn that on for users, even for a force-installed extension.
+
+To close that gap, turn private browsing off with policy:
+
+| Browser | Group Policy setting | Value |
+|---|---|---|
+| Chrome | Google → Google Chrome → **Incognito mode availability** | Incognito mode disabled (`IncognitoModeAvailability` = 1) |
+| Edge | Microsoft Edge → **Configure InPrivate mode availability** | InPrivate mode disabled (`InPrivateModeAvailability` = 1) |
+
+Without Group Policy, set `$DisablePrivateBrowsing = $true` at the top of
+`deploy/Set-ExtensionForceInstall.ps1`. It is `$false` by default. `-Remove`
+clears these values again if they are still 1. This affects every user on the PC:
+the Incognito/InPrivate menu items and shortcuts disappear.
+
 ## Deploying to Macs (Chrome)
 
 Chrome on macOS only force-installs a self-hosted extension when Chrome is
@@ -326,6 +344,9 @@ different extension ID. That doesn't matter for testing the rules.
 - **Other Google tabs are redirected to Web.** Images, Videos, News, Shopping,
   Books and similar tabs all use `/search?` URLs without `udm=14`, so they land on
   Web results. See *Optional: allow another view* above.
+- **Not in Incognito/InPrivate by default.** Users must allow the extension in
+  private windows themselves, or you turn private browsing off (see *Incognito and
+  InPrivate windows*).
 - **Only top-level navigations are changed.** Searches inside iframes, and
   in-page navigations Google makes without loading a new page, are not redirected.
   When Google switches tabs that way, the next full page load is corrected.
