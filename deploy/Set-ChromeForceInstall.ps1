@@ -29,8 +29,8 @@ param(
     [switch]$Remove
 )
 
-# ---- Settings: copy these from the GitHub Actions run summary ---------------
-$ExtensionId = 'REPLACE_WITH_EXTENSION_ID'
+# ---- Settings (from the GitHub Actions run summary; ID is fixed by EXTENSION_PEM) ----
+$ExtensionId = 'enkieoehgkejdljiejbjmenfloafdfgg'
 $UpdateUrl   = 'https://onemako.github.io/block-google-ai-search/updates.xml'
 # -----------------------------------------------------------------------------
 
