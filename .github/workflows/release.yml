@@ -130,6 +130,33 @@ jobs:
         with:
           name: crx
 
+      # Fetch the live files anonymously, the way Chrome will, and check they match this build.
+      - name: Verify published files over HTTPS
+        run: |
+          set -euo pipefail
+          read -r ID VERSION UPDATE_URL CRX_URL SHA < <(node -p '
+            const i = require("./build-info.json");
+            [i.extensionId, i.version, i.updateUrl, i.crxUrl, i.crxSha256].join(" ")')
+          bust="nocache=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for attempt in $(seq 1 20); do
+            # No -L: Chrome should get a direct 200, not a redirect.
+            xml_status=$(curl -sS -o live.xml -w '%{http_code}' "${UPDATE_URL}?${bust}" || true)
+            crx_status=$(curl -sS -o live.crx -w '%{http_code} %{content_type}' "${CRX_URL}?${bust}" || true)
+            if [ "$xml_status" = "200" ] && [ "${crx_status%% *}" = "200" ] \
+               && grep -q "appid='${ID}'" live.xml && grep -q "version='${VERSION}'" live.xml \
+               && [ "$(sha256sum live.crx | cut -d' ' -f1)" = "$SHA" ]; then
+              echo "updates.xml: HTTP $xml_status, appid ${ID}, version ${VERSION}"
+              echo "webonly.crx: HTTP ${crx_status}, sha256 ${SHA}"
+              grep -q "codebase='${CRX_URL}'" live.xml || { echo "::error::codebase in live updates.xml is not ${CRX_URL}"; exit 1; }
+              echo "Verified: live files match extension ID ${ID}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Attempt ${attempt}: updates.xml HTTP ${xml_status}, webonly.crx HTTP ${crx_status}; waiting for Pages..."
+            sleep 15
+          done
+          echo "::error::Published files at ${UPDATE_URL} are not reachable anonymously or do not match this build. If the Pages site is private (Enterprise access control), Chrome cannot download it either."
+          exit 1
+
       - name: Create GitHub Release (archive copy)
         env:
           GH_TOKEN: ${{ github.token }}

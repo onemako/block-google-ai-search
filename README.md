@@ -115,9 +115,13 @@ generates a new key.
 Open **Settings → Pages → Build and deployment → Source** and choose **GitHub
 Actions**.
 
-The site is served at `https://onemako.github.io/block-google-ai-search/`. Pages
-for a private repository needs a paid GitHub plan. The `.crx` and
-`updates.xml` must be reachable without signing in, so the site must be public.
+The site is served at `https://onemako.github.io/block-google-ai-search/`. The
+repository itself can be private; Pages for a private repository needs a paid
+GitHub plan. The **site** must still be publicly reachable, because Chrome
+downloads `updates.xml` and `webonly.crx` without signing in. On GitHub Pro and
+Team, Pages sites are always public. On GitHub Enterprise Cloud, leave the
+Pages visibility set to public. After each deploy, the workflow fetches both
+files anonymously and fails if they can't be reached or don't match the build.
 
 If you fork or rename the repository, change `update_url` in
 `extension/manifest.json` to match. The build fails if it doesn't match the
@@ -139,7 +143,8 @@ extension**. You can also start it by hand from the Actions tab
    `EXTENSION_PEM`.
 3. Computes the extension ID from the public key, then checks it against the ID
    inside the signed CRX header. It also verifies the CRX signature.
-4. Publishes `webonly.crx`, `updates.xml` and a small `index.html` to GitHub Pages.
+4. Publishes `webonly.crx`, `updates.xml` and a small `index.html` to GitHub Pages,
+   then downloads them anonymously over HTTPS to check the live copies match.
 5. Creates a GitHub Release `v<version>` with the `.crx` attached, as an archive
    copy. Chrome never downloads from the Release. `updates.xml` points at the
    Pages URL, because Release downloads redirect.
