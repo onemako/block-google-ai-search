@@ -4,10 +4,10 @@
 # extension without an MDM. Once enrolled, the extension itself is
 # force-installed from the Google Admin console (see README).
 #
-# Run as root, e.g. as a NinjaOne agent script on macOS.
+# Run as root, e.g. as an RMM agent script on macOS.
 # Pass the enrollment token (Google Admin console > Devices > Chrome >
 # Managed browsers > Enrollment tokens) in ONE of these ways:
-#   - NinjaOne script variable/environment variable CHROME_ENROLLMENT_TOKEN
+#   - script variable/environment variable CHROME_ENROLLMENT_TOKEN
 #   - first argument:  enroll-chrome-enterprise-core.sh <token>
 # Do not commit the token to the repository.
 #

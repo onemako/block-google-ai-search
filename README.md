@@ -13,7 +13,7 @@ installs the same signed `.crx`, so the extension ID is the same in both browser
 |---|---|---|
 | Google Chrome | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
 | Microsoft Edge | Windows (domain-joined) | Group Policy, or `deploy/Set-ExtensionForceInstall.ps1` |
-| Google Chrome | macOS | Chrome Enterprise Core enrollment (`deploy/mac/enroll-chrome-enterprise-core.sh`, run by an RMM agent such as NinjaOne), or `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through an MDM |
+| Google Chrome | macOS | Chrome Enterprise Core enrollment (`deploy/mac/enroll-chrome-enterprise-core.sh`, run by your RMM agent), or `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through an MDM |
 
 Firefox and Safari are not supported. Firefox needs a Mozilla-signed `.xpi`, and
 Safari needs a signed and notarized Mac app.
@@ -220,7 +220,7 @@ powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1 
 powershell -ExecutionPolicy Bypass -File .\deploy\Set-ExtensionForceInstall.ps1 -Remove   # remove only this extension
 ```
 
-Run it as **SYSTEM** (for example, NinjaOne "Run As: System") or as an elevated
+Run it as **SYSTEM** (in an RMM tool, choose to run as System) or as an elevated
 local administrator. The policy is machine-wide (`HKLM`), so it applies to every
 user on the PC. If the script is started in 32-bit PowerShell, it relaunches
 itself in 64-bit PowerShell, so the values land where Chrome and Edge read them.
@@ -241,11 +241,11 @@ managed in one of these ways:
 - the Mac is bound to a directory through MCX;
 - Chrome is enrolled in **Chrome Enterprise Core**.
 
-An RMM agent alone, such as the NinjaOne agent, doesn't count. Chrome then marks
+An RMM agent alone doesn't count. Chrome then marks
 the entry `[BLOCKED]`, the same way it does on a Windows PC that isn't
 domain-joined.
 
-### Option A: Chrome Enterprise Core + NinjaOne agent (no MDM needed)
+### Option A: Chrome Enterprise Core + an RMM agent (no MDM needed)
 
 Chrome Enterprise Core is Google's free cloud management for the Chrome browser.
 Chrome is enrolled with a token, and policies, including the extension
@@ -265,9 +265,9 @@ force-install, are set in the Google Admin console.
    - URL: `https://onemako.github.io/block-google-ai-search/updates.xml`
 
    Set its installation policy to **Force install** and save.
-4. **Enroll Chrome on each Mac through the NinjaOne agent.** Add
+4. **Enroll Chrome on each Mac through your RMM agent.** Add
    [`deploy/mac/enroll-chrome-enterprise-core.sh`](deploy/mac/enroll-chrome-enterprise-core.sh)
-   as a macOS script in NinjaOne and run it as root. Pass the token either as a
+   as a macOS script in your RMM tool and run it as root. Pass the token either as a
    script variable named `CHROME_ENROLLMENT_TOKEN` or as the first script
    parameter. The script writes the token to
    `/Library/Google/Chrome/CloudManagementEnrollmentToken`. Chrome enrolls the next
@@ -286,11 +286,10 @@ console force-install applies.
 
 ### Option B: an MDM configuration profile
 
-If the Macs are ever enrolled in an MDM (NinjaOne MDM, Jamf, Intune, Kandji,
-Mosyle…), deploy
+If the Macs are ever enrolled in an MDM (Jamf, Intune, Kandji, Mosyle…),
+deploy
 [`deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig`](deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig)
-as a custom configuration profile scoped to computers. In NinjaOne MDM, that's
-the macOS policy's **Custom Payloads**. The profile sets
+as a custom configuration profile scoped to computers. The profile sets
 `ExtensionInstallForcelist` for `com.google.Chrome`. On a Mac, `System Settings →
 General → Device Management` should list "Google Web Results Only (Chrome)".
 
