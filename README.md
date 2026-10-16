@@ -155,7 +155,12 @@ Chrome checks for updates every few hours. To update a PC right away, open
 
 ## Finding the extension ID
 
-Any of these works:
+The current values (fixed for as long as `EXTENSION_PEM` stays the same) are:
+
+- Extension ID: `enkieoehgkejdljiejbjmenfloafdfgg`
+- Force-install string: `enkieoehgkejdljiejbjmenfloafdfgg;https://onemako.github.io/block-google-ai-search/updates.xml`
+
+To look them up yourself, any of these works:
 
 - The **summary** of the latest workflow run (Actions tab → the run → Summary).
 - `https://onemako.github.io/block-google-ai-search/updates.xml`: the `appid` attribute.
@@ -187,8 +192,8 @@ Force-installed extensions can't be disabled or removed by users.
 
 ### Single PC without GPO: `deploy/Set-ChromeForceInstall.ps1`
 
-Edit `$ExtensionId` (and `$UpdateUrl` if needed) at the top of the script, then
-run it in an **elevated** PowerShell:
+`$ExtensionId` and `$UpdateUrl` at the top of the script are already filled in.
+Run it in an **elevated** PowerShell:
 
 ```powershell
 .\deploy\Set-ChromeForceInstall.ps1           # add the entry
