@@ -15,7 +15,8 @@
 
     Optional: set $DisablePrivateBrowsing = $true below to also turn off
     Incognito (Chrome) and InPrivate (Edge), because extensions don't run in
-    private windows unless each user allows it.
+    private windows unless each user allows it. -Remove always turns
+    Incognito/InPrivate back on.
 
     Run from an elevated (Administrator) PowerShell:
         powershell -ExecutionPolicy Bypass -File .\Set-ExtensionForceInstall.ps1
@@ -50,8 +51,8 @@ $Browsers    = @('Chrome', 'Edge')   # remove one to manage only the other
 # Extensions do not run in Incognito (Chrome) or InPrivate (Edge) windows unless
 # the user turns on "Allow in Incognito", and no policy can turn that on for
 # them. Set this to $true to turn private browsing OFF for everyone on this PC,
-# so searches can't bypass the extension that way. -Remove undoes it only if
-# the value is still the one this script set.
+# so searches can't bypass the extension that way. -Remove always turns
+# private browsing back on (whatever this setting is).
 $DisablePrivateBrowsing = $false
 # -----------------------------------------------------------------------------
 
@@ -173,15 +174,17 @@ function Restore-PrivateBrowsing([string]$Browser) {
     if ($null -ne $current -and [int]$current -eq 1) {
         Remove-ItemProperty -LiteralPath $p.Path -Name $p.Name
         Write-Host "[$Browser] Removed $($p.Name) (private browsing allowed again)."
+    } elseif ($null -eq $current) {
+        Write-Host "[$Browser] $($p.Name) is not set. Private browsing is already allowed."
     } else {
-        Write-Host "[$Browser] $($p.Name) is not 1. Left unchanged."
+        Write-Host "[$Browser] $($p.Name) is $current (not set by this script). Left unchanged."
     }
 }
 
 foreach ($b in $Browsers) {
     if ($Remove) {
         Remove-OurEntry $b $PolicyKeys[$b]
-        if ($DisablePrivateBrowsing) { Restore-PrivateBrowsing $b }
+        Restore-PrivateBrowsing $b   # always re-allow Incognito/InPrivate on -Remove
     } else {
         Add-OurEntry $b $PolicyKeys[$b]
         if ($DisablePrivateBrowsing) { Disable-PrivateBrowsing $b }

@@ -248,7 +248,7 @@ To close that gap, turn private browsing off with policy:
 
 Without Group Policy, set `$DisablePrivateBrowsing = $true` at the top of
 `deploy/Set-ExtensionForceInstall.ps1`. It is `$false` by default. `-Remove`
-clears these values again if they are still 1. This affects every user on the PC:
+always turns Incognito/InPrivate back on, whatever this setting is. This affects every user on the PC:
 the Incognito/InPrivate menu items and shortcuts disappear.
 
 ## Deploying to Macs (Chrome)
