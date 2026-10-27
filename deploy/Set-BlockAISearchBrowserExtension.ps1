@@ -19,8 +19,8 @@
     Incognito/InPrivate back on.
 
     Run from an elevated (Administrator) PowerShell:
-        powershell -ExecutionPolicy Bypass -File .\Set-GoogleWebResultsOnly.ps1
-        powershell -ExecutionPolicy Bypass -File .\Set-GoogleWebResultsOnly.ps1 -Remove
+        powershell -ExecutionPolicy Bypass -File .\Set-BlockAISearchBrowserExtension.ps1
+        powershell -ExecutionPolicy Bypass -File .\Set-BlockAISearchBrowserExtension.ps1 -Remove
 
     Then open chrome://policy or edge://policy and click "Reload policies".
     Both browsers only accept this self-hosted extension on PCs that are

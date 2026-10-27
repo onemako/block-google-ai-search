@@ -11,8 +11,8 @@ installs the same signed `.crx`, so the extension ID is the same in both browser
 
 | Browser | Platform | How it is deployed |
 |---|---|---|
-| Google Chrome | Windows (domain-joined) | Group Policy, or `deploy/Set-GoogleWebResultsOnly.ps1` |
-| Microsoft Edge | Windows (domain-joined) | Group Policy, or `deploy/Set-GoogleWebResultsOnly.ps1` |
+| Google Chrome | Windows (domain-joined) | Group Policy, or `deploy/Set-BlockAISearchBrowserExtension.ps1` |
+| Microsoft Edge | Windows (domain-joined) | Group Policy, or `deploy/Set-BlockAISearchBrowserExtension.ps1` |
 | Google Chrome | macOS | Chrome Enterprise Core enrollment (`deploy/mac/enroll-chrome-enterprise-core.sh`, run by your RMM agent), or `deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig` through an MDM |
 
 Firefox and Safari are not supported. Firefox needs a Mozilla-signed `.xpi`, and
@@ -87,7 +87,7 @@ extension/            Extension source (the workflow runs when this folder chang
   icons/              Placeholder icons (regenerate with scripts/make-icons.py)
 scripts/build.mjs     Build, sign (CRX3), verify, and write updates.xml
 .github/workflows/release.yml   CI: build, sign, publish to Pages, create a Release
-deploy/Set-GoogleWebResultsOnly.ps1   Installs/removes the extension in Chrome + Edge on a single PC
+deploy/Set-BlockAISearchBrowserExtension.ps1   Installs/removes the extension in Chrome + Edge on a single PC
 deploy/mac/enroll-chrome-enterprise-core.sh   Enrolls Chrome on a Mac in Chrome Enterprise Core (no MDM)
 deploy/mac/GoogleWebResultsOnly-Chrome.mobileconfig   macOS profile for Chrome (deploy with MDM)
 ```
@@ -209,15 +209,15 @@ Copy the exact string from the workflow summary.
 
 Force-installed extensions can't be disabled or removed by users.
 
-### Single PC without GPO: `deploy/Set-GoogleWebResultsOnly.ps1`
+### Single PC without GPO: `deploy/Set-BlockAISearchBrowserExtension.ps1`
 
 `$ExtensionId` and `$UpdateUrl` at the top of the script are already filled in.
 `$Browsers` lists `Chrome` and `Edge`. Remove one if you want the script to handle
 only the other. Run it in an **elevated** PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\Set-GoogleWebResultsOnly.ps1           # add
-powershell -ExecutionPolicy Bypass -File .\deploy\Set-GoogleWebResultsOnly.ps1 -Remove   # remove only this extension
+powershell -ExecutionPolicy Bypass -File .\deploy\Set-BlockAISearchBrowserExtension.ps1           # add
+powershell -ExecutionPolicy Bypass -File .\deploy\Set-BlockAISearchBrowserExtension.ps1 -Remove   # remove only this extension
 ```
 
 Run it as **SYSTEM** (in an RMM tool, choose to run as System) or as an elevated
@@ -247,7 +247,7 @@ To close that gap, turn private browsing off with policy:
 | Edge | Microsoft Edge → **Configure InPrivate mode availability** | InPrivate mode disabled (`InPrivateModeAvailability` = 1) |
 
 Without Group Policy, set `$DisablePrivateBrowsing = $true` at the top of
-`deploy/Set-GoogleWebResultsOnly.ps1`. It is `$false` by default. `-Remove`
+`deploy/Set-BlockAISearchBrowserExtension.ps1`. It is `$false` by default. `-Remove`
 always turns Incognito/InPrivate back on, whatever this setting is. This affects every user on the PC:
 the Incognito/InPrivate menu items and shortcuts disappear.
 
